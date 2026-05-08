@@ -4,41 +4,45 @@ const router = express.Router();
 const Task = require("../models/Task");
 const auth = require("../middleware/authMiddleware");
 
-// ======================
-// GET TASKS
-// ======================
+// =======================
+// GET ALL TASKS
+// =======================
 router.get("/", auth, async (req, res) => {
   try {
     const tasks = await Task.find({
       user: req.user.id,
-    });
+    }).sort({ createdAt: -1 });
 
     res.json(tasks);
   } catch (err) {
-    console.log("GET TASKS ERROR:", err.message);
+    console.error(err);
 
     res.status(500).json({
+      success: false,
       message: "Server Error",
     });
   }
 });
 
-// ======================
+// =======================
 // CREATE TASK
-// ======================
+// =======================
 router.post("/", auth, async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title } = req.body;
 
-    if (!title) {
+    // VALIDATION
+    if (!title || !title.trim()) {
       return res.status(400).json({
-        message: "Title required",
+        success: false,
+        message: "Task title is required",
       });
     }
 
+    // CREATE TASK
     const newTask = new Task({
-      title,
-      description,
+      title: title.trim(),
+      completed: false,
       user: req.user.id,
     });
 
@@ -46,64 +50,78 @@ router.post("/", auth, async (req, res) => {
 
     res.status(201).json(savedTask);
   } catch (err) {
-    console.log("CREATE TASK ERROR:", err.message);
+    console.error(err);
 
     res.status(500).json({
+      success: false,
       message: "Server Error",
     });
   }
 });
 
-// ======================
+// =======================
 // UPDATE TASK
-// ======================
+// =======================
 router.put("/:id", auth, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
 
     if (!task) {
       return res.status(404).json({
+        success: false,
         message: "Task not found",
       });
     }
 
+    // SECURITY
     if (task.user.toString() !== req.user.id) {
       return res.status(401).json({
+        success: false,
         message: "Unauthorized",
       });
     }
 
-    task.title = req.body.title || task.title;
-    task.description =
-      req.body.description || task.description;
+    // UPDATE TITLE
+    if (req.body.title !== undefined) {
+      task.title = req.body.title;
+    }
+
+    // UPDATE COMPLETED
+    if (req.body.completed !== undefined) {
+      task.completed = req.body.completed;
+    }
 
     const updatedTask = await task.save();
 
     res.json(updatedTask);
   } catch (err) {
-    console.log("UPDATE TASK ERROR:", err.message);
+    console.error(err);
 
     res.status(500).json({
+      success: false,
       message: "Server Error",
     });
   }
 });
 
-// ======================
+// =======================
 // DELETE TASK
-// ======================
+// =======================
 router.delete("/:id", auth, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
 
     if (!task) {
       return res.status(404).json({
+        success: false,
         message: "Task not found",
       });
     }
 
+    // SECURITY
     if (task.user.toString() !== req.user.id) {
       return res.status(401).json({
+        success: false,
         message: "Unauthorized",
       });
     }
@@ -111,12 +129,14 @@ router.delete("/:id", auth, async (req, res) => {
     await task.deleteOne();
 
     res.json({
+      success: true,
       message: "Task deleted",
     });
   } catch (err) {
-    console.log("DELETE TASK ERROR:", err.message);
+    console.error(err);
 
     res.status(500).json({
+      success: false,
       message: "Server Error",
     });
   }
