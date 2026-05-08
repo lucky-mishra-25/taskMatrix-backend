@@ -1,14 +1,46 @@
-import React from "react";
+ import React, { useState } from "react";
 
 function Premium() {
   const BASE_URL =
     process.env.REACT_APP_API_URL ||
     "https://taskmatrix-backend-wo86.onrender.com";
 
+  const [loading, setLoading] = useState(false);
+
+  // Load Razorpay SDK safely
+  const loadRazorpay = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true);
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handlePayment = async () => {
     try {
+      setLoading(true);
+
       const token = localStorage.getItem("token");
 
+      if (!token) {
+        alert("Please login first");
+        setLoading(false);
+        return;
+      }
+
+      const loaded = await loadRazorpay();
+
+      if (!loaded) {
+        alert("Razorpay SDK failed to load");
+        setLoading(false);
+        return;
+      }
+
+      // CREATE ORDER
       const res = await fetch(
         `${BASE_URL}/api/payment/create-order`,
         {
@@ -25,15 +57,9 @@ function Premium() {
 
       const data = await res.json();
 
-      console.log("PAYMENT RESPONSE:", data);
-
       if (!data.success) {
         alert(data.message || "Order creation failed");
-        return;
-      }
-
-      if (!window.Razorpay) {
-        alert("Razorpay SDK not loaded");
+        setLoading(false);
         return;
       }
 
@@ -47,36 +73,41 @@ function Premium() {
 
         handler: function (response) {
           alert("Payment Successful ✅");
+          console.log("Payment:", response);
+        },
 
-          console.log(response);
+        prefill: {
+          name: "User",
         },
 
         theme: {
-          color: "#3399cc",
+          color: "#FFD700",
         },
       };
 
       const rzp = new window.Razorpay(options);
 
+      rzp.on("payment.failed", function (response) {
+        console.error(response.error);
+        alert("Payment Failed ❌");
+      });
+
       rzp.open();
     } catch (err) {
       console.error("PAYMENT ERROR:", err);
-
       alert("Payment failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        textAlign: "center",
-        marginTop: "100px",
-      }}
-    >
+    <div style={{ textAlign: "center", marginTop: "100px" }}>
       <h1>Upgrade To Premium 🚀</h1>
 
       <button
         onClick={handlePayment}
+        disabled={loading}
         style={{
           padding: "15px 25px",
           background: "gold",
@@ -84,9 +115,10 @@ function Premium() {
           cursor: "pointer",
           fontSize: "18px",
           borderRadius: "10px",
+          opacity: loading ? 0.6 : 1,
         }}
       >
-        Pay ₹500
+        {loading ? "Processing..." : "Pay ₹500"}
       </button>
     </div>
   );
