@@ -126,7 +126,7 @@ const aiRoutes = require("./routes/aiRoutes");
 let paymentRoutes;
 
 try {
-  paymentRoutes = require("./routes/paymentRoutes");
+  paymentRoutes = require("./routes/payment");
 
   console.log("✅ Payment route loaded");
 } catch (err) {

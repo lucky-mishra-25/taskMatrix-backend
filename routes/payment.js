@@ -1,48 +1,95 @@
-const express = require("express");
-const router = express.Router();
-const Razorpay = require("razorpay");
-const auth = require("../middleware/authMiddleware");
+import React from "react";
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+function Premium() {
+  const BASE_URL =
+    process.env.REACT_APP_API_URL ||
+    "https://taskmatrix-backend-wo86.onrender.com";
 
-// =======================
-// CREATE ORDER
-// =======================
-router.post("/create-order", auth, async (req, res) => {
-  try {
-    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message: "Razorpay keys missing",
-      });
+  const handlePayment = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${BASE_URL}/api/payment/create-order`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            amount: 50000,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      console.log("PAYMENT RESPONSE:", data);
+
+      if (!data.success) {
+        alert(data.message || "Order creation failed");
+        return;
+      }
+
+      if (!window.Razorpay) {
+        alert("Razorpay SDK not loaded");
+        return;
+      }
+
+      const options = {
+        key: data.key,
+        amount: data.order.amount,
+        currency: data.order.currency,
+        name: "TaskMatrix",
+        description: "Premium Upgrade",
+        order_id: data.order.id,
+
+        handler: function (response) {
+          alert("Payment Successful ✅");
+
+          console.log(response);
+        },
+
+        theme: {
+          color: "#3399cc",
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+
+      rzp.open();
+    } catch (err) {
+      console.error("PAYMENT ERROR:", err);
+
+      alert("Payment failed");
     }
+  };
 
-    const amount = req.body.amount || 49900;
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        marginTop: "100px",
+      }}
+    >
+      <h1>Upgrade To Premium 🚀</h1>
 
-    const options = {
-      amount,
-      currency: "INR",
-      receipt: `receipt_${Date.now()}`,
-    };
+      <button
+        onClick={handlePayment}
+        style={{
+          padding: "15px 25px",
+          background: "gold",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "18px",
+          borderRadius: "10px",
+        }}
+      >
+        Pay ₹500
+      </button>
+    </div>
+  );
+}
 
-    const order = await razorpay.orders.create(options);
-
-    res.json({
-      success: true,
-      order,
-      key: process.env.RAZORPAY_KEY_ID,
-    });
-  } catch (error) {
-    console.error("Razorpay Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Order creation failed",
-      error: error.message,
-    });
-  }
-});
-
-module.exports = router;
+export default Premium;
