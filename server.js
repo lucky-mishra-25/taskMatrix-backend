@@ -18,6 +18,11 @@ if (!process.env.MONGO_URI) {
   process.exit(1);
 }
 
+if (!process.env.JWT_SECRET) {
+  console.error("❌ JWT_SECRET missing in .env");
+  process.exit(1);
+}
+
 // =======================
 // DATABASE CONNECTION
 // =======================
@@ -25,7 +30,10 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => {
-    console.error("❌ MongoDB Connection Failed:", err.message);
+    console.error(
+      "❌ MongoDB Connection Failed:",
+      err.message
+    );
     process.exit(1);
   });
 
@@ -34,16 +42,49 @@ mongoose
 // =======================
 app.use(helmet());
 
-// ⚠️ FIX: Dynamic CORS for deployment
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    credentials: true,
-  })
-);
 app.use(express.json());
 
-// Logging only in development
+// IMPORTANT FOR RENDER/VERCEL
+app.set("trust proxy", 1);
+
+// =======================
+// PRODUCTION CORS
+// =======================
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // allow postman/mobile apps
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(
+          new Error("Not allowed by CORS")
+        );
+      }
+    },
+
+    credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+    ],
+  })
+);
+
+// =======================
+// LOGGING
+// =======================
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
@@ -53,19 +94,25 @@ if (process.env.NODE_ENV === "development") {
 // =======================
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+
   max: 20,
+
   message: {
     success: false,
-    message: "Too many login attempts. Try again later.",
+    message:
+      "Too many login attempts. Try again later.",
   },
 });
 
 const aiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
+
   max: 30,
+
   message: {
     success: false,
-    message: "Too many requests. Please slow down.",
+    message:
+      "Too many requests. Please slow down.",
   },
 });
 
@@ -77,37 +124,55 @@ const taskRoutes = require("./routes/taskRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 
 let paymentRoutes;
+
 try {
-  paymentRoutes = require("./routes/payment");
+  paymentRoutes = require("./routes/paymentRoutes");
+
   console.log("✅ Payment route loaded");
 } catch (err) {
-  console.error("❌ Payment route NOT found:", err.message);
+  console.error(
+    "❌ Payment route NOT found:",
+    err.message
+  );
 }
 
 // =======================
 // ROUTES USAGE
 // =======================
 
-// ⚠️ FIX: Apply login limiter BEFORE auth routes so it actually fires
-app.use("/api/auth/login", loginLimiter);
+// AUTH
+app.use(
+  "/api/auth/login",
+  loginLimiter
+);
+
 app.use("/api/auth", authRoutes);
 
-// Tasks
+// TASKS
 app.use("/api/tasks", taskRoutes);
 
 // AI
-app.use("/api/ai", aiLimiter, aiRoutes);
+app.use(
+  "/api/ai",
+  aiLimiter,
+  aiRoutes
+);
 
-// Payment (ONLY if exists)
+// PAYMENT
 if (paymentRoutes) {
-  app.use("/api/payment", paymentRoutes);
+  app.use(
+    "/api/payment",
+    paymentRoutes
+  );
 }
 
 // =======================
 // HEALTH CHECK
 // =======================
 app.get("/", (req, res) => {
-  res.send("API Running 🚀");
+  res.send(
+    "🚀 TaskMatrix Backend API Running..."
+  );
 });
 
 // =======================
@@ -128,16 +193,20 @@ app.use((err, req, res, next) => {
 
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Internal Server Error",
+    message:
+      err.message ||
+      "Internal Server Error",
   });
 });
 
 // =======================
 // START SERVER
 // =======================
-// Note: process.env.PORT is perfect for Render/Railway/Fly.io
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(
+    `🚀 Server running on port ${PORT}`
+  );
 });
