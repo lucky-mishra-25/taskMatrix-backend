@@ -30,10 +30,7 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => {
-    console.error(
-      "❌ MongoDB Connection Failed:",
-      err.message
-    );
+    console.error("❌ MongoDB Connection Failed:", err.message);
     process.exit(1);
   });
 
@@ -41,44 +38,30 @@ mongoose
 // MIDDLEWARE
 // =======================
 app.use(helmet());
-
 app.use(express.json());
 
-// IMPORTANT FOR RENDER/VERCEL
+// IMPORTANT FOR RENDER / PROXY
 app.set("trust proxy", 1);
 
 // =======================
-// PRODUCTION CORS
+// CORS CONFIG
 // =======================
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-];
+const allowedOrigins = [process.env.FRONTEND_URL];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow postman/mobile apps
-      if (!origin) {
-        return callback(null, true);
-      }
+      if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(
-          new Error("Not allowed by CORS")
-        );
+        console.log("Blocked CORS:", origin);
+        callback(new Error("Not allowed by CORS"));
       }
     },
-
     credentials: true,
-
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "DELETE",
-    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
 
@@ -94,25 +77,19 @@ if (process.env.NODE_ENV === "development") {
 // =======================
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-
   max: 20,
-
   message: {
     success: false,
-    message:
-      "Too many login attempts. Try again later.",
+    message: "Too many login attempts. Try again later.",
   },
 });
 
 const aiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-
   max: 30,
-
   message: {
     success: false,
-    message:
-      "Too many requests. Please slow down.",
+    message: "Too many requests. Please slow down.",
   },
 });
 
@@ -123,56 +100,39 @@ const authRoutes = require("./routes/authRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 
-let paymentRoutes;
-
-try {
-  paymentRoutes = require("./routes/payment");
-
-  console.log("✅ Payment route loaded");
-} catch (err) {
-  console.error(
-    "❌ Payment route NOT found:",
-    err.message
-  );
-}
+// ✅ FIXED: NO TRY/CATCH (FAIL FAST IF MISSING)
+const paymentRoutes = require("./routes/payment");
 
 // =======================
-// ROUTES USAGE
+// DEBUG MIDDLEWARE (VERY USEFUL)
+// =======================
+app.use((req, res, next) => {
+  console.log("➡️", req.method, req.url);
+  next();
+});
+
+// =======================
+// ROUTES
 // =======================
 
 // AUTH
-app.use(
-  "/api/auth/login",
-  loginLimiter
-);
-
+app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth", authRoutes);
 
 // TASKS
 app.use("/api/tasks", taskRoutes);
 
 // AI
-app.use(
-  "/api/ai",
-  aiLimiter,
-  aiRoutes
-);
+app.use("/api/ai", aiLimiter, aiRoutes);
 
 // PAYMENT
-if (paymentRoutes) {
-  app.use(
-    "/api/payment",
-    paymentRoutes
-  );
-}
+app.use("/api/payment", paymentRoutes);
 
 // =======================
 // HEALTH CHECK
 // =======================
 app.get("/", (req, res) => {
-  res.send(
-    "🚀 TaskMatrix Backend API Running..."
-  );
+  res.send("🚀 TaskMatrix Backend API Running...");
 });
 
 // =======================
@@ -182,6 +142,7 @@ app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "Route not found",
+    path: req.originalUrl,
   });
 });
 
@@ -189,24 +150,19 @@ app.use((req, res) => {
 // GLOBAL ERROR HANDLER
 // =======================
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error("❌ Error:", err.message);
 
   res.status(err.status || 500).json({
     success: false,
-    message:
-      err.message ||
-      "Internal Server Error",
+    message: err.message || "Internal Server Error",
   });
 });
 
 // =======================
 // START SERVER
 // =======================
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(
-    `🚀 Server running on port ${PORT}`
-  );
+  console.log(`🚀 Server running on port ${PORT}`);
 });
